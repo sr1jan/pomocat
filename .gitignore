@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+DerivedData/
+frames/
+masked/
+raw_clip.mp4
+.DS_Store
