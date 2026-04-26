@@ -41,3 +41,24 @@ func accumulates_active_seconds_when_not_idle() {
 
     #expect(scheduler.accumulatedActiveSeconds == 5, "Should accumulate 5 seconds of active time")
 }
+
+@Test
+func pauses_accumulator_when_idle_above_threshold() {
+    let clock = TestClock()
+    let idle = TestIdleSource()
+    idle.seconds = 120  // way above threshold
+
+    let scheduler = BreakScheduler(
+        workDuration: 10,
+        breakDuration: 3,
+        idleResetThreshold: 60,
+        pollInterval: 1,
+        idleSource: idle.read,
+        scheduleTick: clock.schedule
+    )
+    scheduler.start()
+
+    clock.advance(ticks: 5)
+
+    #expect(scheduler.accumulatedActiveSeconds == 0, "Should not accumulate while idle")
+}

@@ -50,6 +50,10 @@ final class BreakScheduler {
     }
 
     func tick() {
+        let idle = idleSource()
+        if idle >= idleResetThreshold {
+            return
+        }
         accumulatedActiveSeconds += pollInterval
     }
 }
