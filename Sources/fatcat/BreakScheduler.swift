@@ -50,6 +50,6 @@ final class BreakScheduler {
     }
 
     func tick() {
-        // To be implemented in Tasks 4-9 via TDD
+        accumulatedActiveSeconds += pollInterval
     }
 }
