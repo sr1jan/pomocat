@@ -16,7 +16,7 @@ It's a personal weekend hack — small, charming, and runs forever in the backgr
 |---|---|---|
 | Scope | Personal weekend hack on macOS | One evening of work, ~150 lines of Swift |
 | Forcefulness | Screen-saver-level overlay, no input blocking | Matches the original; keyboard/mouse pass through to apps underneath |
-| Trigger | Activity-aware via `CGEventSource.secondsSinceLastEventType` | "50 min of real work," not "50 min wall clock"; no permissions needed |
+| Trigger | Activity-aware via `CGEventSource.secondsSinceLastEventType` | "25 min of real Pomodoro work," not "25 min wall clock"; no permissions needed |
 | Visuals | Wandering cat with transparency | Cat sits *on top of* your work, not in a tinted box |
 | Cat content | Alpha-channel video clip, not sprites | Real cat footage — encodes natural walking/sitting/lounging behavior with no animation logic |
 | Asset source | YouTube clip → `rembg` → HEVC-with-alpha | Free, fast, swappable without code changes |
@@ -39,10 +39,11 @@ It's a personal weekend hack — small, charming, and runs forever in the backgr
 ├── Tests/fatcatTests/
 │   └── BreakSchedulerTests.swift
 ├── Assets/
-│   └── cat.mov                # Alpha-HEVC video, gitignored (built locally)
+│   └── cat.mov                # Alpha-HEVC video, tracked via git-lfs
 ├── scripts/
 │   └── make-cat-asset.sh      # YouTube clip → rembg → alpha-HEVC pipeline
-├── .gitignore                 # ignores Assets/cat.mov, .build/, .swiftpm/, frames/, masked/, raw_clip.mp4
+├── .gitattributes             # `*.mov filter=lfs diff=lfs merge=lfs -text`
+├── .gitignore                 # ignores .build/, .swiftpm/, frames/, masked/, raw_clip.mp4
 └── README.md
 ```
 
@@ -71,8 +72,8 @@ A struct of constants. Single source of truth for every tunable value.
 
 ```swift
 enum Config {
-    static let workDuration: TimeInterval = 50 * 60        // 50 min of activity
-    static let breakDuration: TimeInterval = 5 * 60        // 5 min cat
+    static let workDuration: TimeInterval = 25 * 60        // 25 min of activity (Pomodoro)
+    static let breakDuration: TimeInterval = 5 * 60        // 5 min cat (Pomodoro short break)
     static let idleResetThreshold: TimeInterval = 60       // 1 min idle = pause
     static let assetPath: String = "Assets/cat.mov"        // relative to launch dir
     static let pollInterval: TimeInterval = 1.0            // tick rate
@@ -190,33 +191,44 @@ let napActivity = ProcessInfo.processInfo.beginActivity(
     reason: "fatcat scheduler must tick reliably"
 )
 
-let screen = NSScreen.main!
 let assetURL = URL(fileURLWithPath: Config.assetPath,
                    relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 
 let scheduler = BreakScheduler()
-let window = CatWindow(for: screen)
-let player = CatPlayer(assetURL: assetURL)
-let label  = TimerLabel(frame: NSRect(
-    x: 80,
-    y: screen.frame.midY - 100,
-    width: 600, height: 220
-))
 
-player.view.frame = window.contentView!.bounds    // cat fills window
-player.view.autoresizingMask = [.width, .height]
-window.contentView?.addSubview(player.view)
-window.contentView?.addSubview(label)             // timer overlaid on left side
+// One CatWindow + CatPlayer + TimerLabel per attached screen.
+// Each screen gets its own AVPlayer playing the same asset URL.
+let screens = NSScreen.screens
+let displays: [(window: CatWindow, player: CatPlayer, label: TimerLabel)] = screens.map { screen in
+    let window = CatWindow(for: screen)
+    let player = CatPlayer(assetURL: assetURL)
+    let label  = TimerLabel(frame: NSRect(
+        x: 80,
+        y: window.contentView!.bounds.midY - 110,
+        width: 600, height: 220
+    ))
+    player.view.frame = window.contentView!.bounds
+    player.view.autoresizingMask = [.width, .height]
+    window.contentView?.addSubview(player.view)
+    window.contentView?.addSubview(label)
+    return (window, player, label)
+}
 
-scheduler.onBreakStart = { window.reveal(); player.play() }
-scheduler.onBreakTick  = { label.setRemaining($0) }
-scheduler.onBreakEnd   = { player.pause(); window.dismiss() }
+scheduler.onBreakStart = {
+    displays.forEach { $0.window.reveal(); $0.player.play() }
+}
+scheduler.onBreakTick = { remaining in
+    displays.forEach { $0.label.setRemaining(remaining) }
+}
+scheduler.onBreakEnd = {
+    displays.forEach { $0.player.pause(); $0.window.dismiss() }
+}
 
 scheduler.start()
 app.run()
 ```
 
-Closures over a delegate protocol because there is exactly one consumer of these callbacks. Closures save ~10 lines and read more linearly.
+Closures over a delegate protocol because there is exactly one consumer of these callbacks. Closures save ~10 lines and read more linearly. Fan-out across screens is a `forEach` per callback — three lines, no scheduler change needed.
 
 ## Data flow
 
@@ -278,11 +290,11 @@ Principle: **fail loudly at startup, run silently after**. Don't wrap normal ope
 
 | Failure | Why not |
 |---|---|
-| Multi-monitor support | v1 ships single-main-screen. Documented in README; not a bug. |
 | Display sleep mid-break | OS hides the window; our timer keeps ticking; break ends normally. No code needed. |
 | Mac sleep mid-work | On wake, idle seconds is huge → trips the 60s threshold → accumulator stays paused. Self-correcting. |
 | User force-quits mid-break | Next launch starts fresh in working state. No persistence to corrupt. |
 | Lock screen overlap | Screen-saver-level windows order *below* the lock screen. Cat is hidden while locked. |
+| Plugging/unplugging monitors mid-session | We snapshot `NSScreen.screens` at startup. New monitors won't get a cat until you restart fatcat. Documented in README. |
 
 ### What we don't add
 
@@ -326,13 +338,14 @@ Six tests, ~80 lines total. Run with `swift test`. They use a `TestClock` (recor
 ### Manual verification checklist (~3 minutes after every meaningful change)
 
 1. **Launch from terminal:** `swift run fatcat`. App stays in foreground. No dock icon appears.
-2. **Trigger a debug break immediately:** during dev, edit `Config.workDuration` to `10` in `Config.swift` and rebuild. Wait 10s. Cat appears. (Restore to `50 * 60` before shipping.)
+2. **Trigger a debug break immediately:** during dev, edit `Config.workDuration` to `10` in `Config.swift` and rebuild. Wait 10s. Cat appears. (Restore to `25 * 60` before shipping.)
 3. **Cat overlay correctness:**
    - [ ] Visible on top of all apps including a fullscreen Safari window
    - [ ] Visible across Spaces (`Ctrl+→` to switch — cat follows)
    - [ ] Mouse clicks pass through to apps underneath (click a button under the cat — it should fire)
    - [ ] Window doesn't steal focus (active app's title bar stays focused)
    - [ ] Cat video loops smoothly with transparent background
+   - [ ] **Multi-monitor:** if you have 2+ displays, every display shows its own cat at the same time, with timers counting down in lockstep
 4. **Timer correctness:** counts down from `5:00` to `0:00`, monospaced digits don't jitter.
 5. **Break ends:** at `0:00`, cat fades out, app returns to working state.
 6. **Idle pause:** with debug `workDuration=30`, leave keyboard idle for >60s — accumulator should pause (verify with a debug `print` of `accumulatedActiveSeconds`).
@@ -440,12 +453,59 @@ When the cat looks bad, iterate on stage 1 (different timestamps or different vi
 
 Both tags identify HEVC bitstreams; they differ only in how parameter sets are stored. AVFoundation only accepts `hvc1`, but ffmpeg defaults to `hev1`. Files with `hev1` open fine in QuickTime (which uses a more permissive code path) but produce a mysterious black `AVPlayerView` in the app. If you ever see "the video plays in QuickTime but not in my app," this is almost always why.
 
+### Storing the asset in git via git-lfs
+
+The cat video is the only content this app has, so the repo is meaningfully incomplete without it. We track it via git-lfs so cloning the repo gives you a working app immediately — no need to rerun `make-cat-asset.sh` unless you want a different cat.
+
+One-time setup on the developer's machine:
+
+```bash
+# Install git-lfs once per machine
+brew install git-lfs
+git lfs install                                    # registers LFS hooks globally
+```
+
+Inside the repo (already done in the initial commit; documented here for traceability):
+
+```bash
+cd ~/fun/fatcat
+git lfs track "*.mov"                              # writes to .gitattributes
+git add .gitattributes
+git add Assets/cat.mov                             # automatically routed through LFS
+git commit -m "track cat.mov via git-lfs"
+```
+
+For a personal hack on a personal repo, GitHub's free LFS quota (1 GB storage, 1 GB/month bandwidth) is overkill — `cat.mov` is ~1–3 MB. If we ever push to a remote that doesn't support LFS, we have to either remove the asset or add the remote's LFS support; since this is local-only for now, that risk is theoretical.
+
+## Multi-monitor support
+
+v1 supports multiple monitors with the **one cat per screen** model: every attached display gets its own `CatWindow`, its own `AVPlayerView` playing the same `cat.mov`, and its own `TimerLabel`. When a break fires, all cats appear simultaneously; when it ends, all cats dismiss. The timer counts down in lockstep on every monitor.
+
+### Why every screen instead of one random screen
+
+The whole point of the app is to interrupt your work. On a 3-monitor setup, "cat appears on a random screen" means there's a 2-in-3 chance you don't notice the break because you're staring at a different monitor. That defeats the design. Annoying-on-every-screen is the right tradeoff.
+
+### Architecture impact
+
+- `BreakScheduler` is unchanged — it knows nothing about screens or windows. It still fires three callbacks; `main.swift` fans each one out across the displays array.
+- `CatWindow` is unchanged — already takes `for screen: NSScreen` in its initializer. Designed for this from day one.
+- `CatPlayer` is unchanged — one instance per screen, each owning its own `AVPlayer`. The video file is read from the same path on disk; macOS's file cache means we're not actually doing N parallel disk reads.
+- `main.swift` grows by ~10 lines: build the `displays` array at startup; loop in each callback.
+
+### Runtime cost
+
+Each `AVPlayer` instance decoding the same 1080p HEVC clip uses ~2–3% CPU on Apple Silicon during the 5-minute break. On a 3-monitor setup that's ~8% CPU spike for 5 minutes every Pomodoro. Acceptable for personal use; if it ever becomes a problem we can move to one shared `AVPlayer` with multiple `AVPlayerLayer` outputs (more code, optimization for later).
+
+### What's deliberately not handled
+
+- **Hot-plugging monitors mid-session.** `NSScreen.screens` is snapshotted at startup. New monitors won't get a cat until you restart fatcat. Subscribing to `NSApplication.didChangeScreenParametersNotification` to rebuild the windows array on the fly is well-understood territory but expands scope beyond a weekend; documented as a README limitation.
+
 ## Out of scope for v1
 
 These are deliberate non-goals — they are reasonable extensions but would expand the project beyond a weekend hack.
 
 - **Menu bar UI** with pause/resume/quit/Settings — natural v2; the overlay code is unchanged
-- **Multi-monitor support** — one `CatWindow` per `NSScreen`, with the cat picking which screen to wander on
+- **Hot-plug monitor reconfiguration** — restart fatcat after changing monitor setup
 - **Configurable durations via UI** — currently requires editing `Config.swift` and rebuilding
 - **Persistence** of work-time accumulator across launches
 - **Multiple cat videos** that rotate per break
@@ -461,7 +521,7 @@ These are deliberate non-goals — they are reasonable extensions but would expa
 4. `TimerLabel.swift` overlaid on the window — verify with hard-coded `5:00`
 5. Asset pipeline script — produce a working `cat.mov` from a chosen YouTube URL
 6. `CatPlayer.swift` — verify cat plays and loops with transparency in the window
-7. Wire everything in `main.swift` — full lifecycle works end-to-end with `workDuration = 10`
-8. Restore real durations, run the manual verification checklist, add to Login Items
+7. Wire everything in `main.swift` — full lifecycle works end-to-end with `workDuration = 10` on a single screen first, then expand the wiring to fan out across `NSScreen.screens`
+8. Restore real durations (Pomodoro 25/5), commit `cat.mov` via git-lfs, run the manual verification checklist (including multi-monitor), add to Login Items
 
 The writing-plans skill will turn this into a sequenced task list with explicit completion criteria.
