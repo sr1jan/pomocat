@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.fatcat</string>
+    <string>com.pomocat</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -33,8 +33,8 @@
     <string>Adaptive</string>
 
     <key>StandardOutPath</key>
-    <string>__REPO__/.fatcat.log</string>
+    <string>__REPO__/.pomocat.log</string>
     <key>StandardErrorPath</key>
-    <string>__REPO__/.fatcat.log</string>
+    <string>__REPO__/.pomocat.log</string>
 </dict>
 </plist>

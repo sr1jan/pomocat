@@ -19,7 +19,7 @@ setbuf(stdout, nil)
 // App Nap. The token must be retained — releasing it ends the activity.
 let activityToken = ProcessInfo.processInfo.beginActivity(
     options: .userInitiated,
-    reason: "fatcat tracks active work time and triggers break overlays"
+    reason: "pomocat tracks active work time and triggers break overlays"
 )
 _ = activityToken  // silence "never used" — its job is to live as long as the app
 
@@ -30,7 +30,7 @@ let assetURL = URL(fileURLWithPath: Config.assetPath,
                    relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 
 guard FileManager.default.fileExists(atPath: assetURL.path) else {
-    print("fatcat: ERROR — asset not found at \(assetURL.path)", to: &standardError)
+    print("pomocat: ERROR — asset not found at \(assetURL.path)", to: &standardError)
     exit(1)
 }
 
@@ -68,7 +68,7 @@ let overlays: [Overlay] = NSScreen.screens.map { screen in
     return Overlay(window: window, view: view, label: label)
 }
 
-print("fatcat: \(overlays.count) screen(s)")
+print("pomocat: \(overlays.count) screen(s)")
 
 // Real Pomodoro durations and idle source — Config defaults are 25m work, 5m
 // break, 60s idle reset. Override either at the BreakScheduler init site for
@@ -76,7 +76,7 @@ print("fatcat: \(overlays.count) screen(s)")
 let scheduler = BreakScheduler()
 
 scheduler.onBreakStart = {
-    print("fatcat: break starting (\(Int(Config.breakDuration / 60))m)")
+    print("pomocat: break starting (\(Int(Config.breakDuration / 60))m)")
     overlays.forEach {
         $0.label.setRemaining(Config.breakDuration)
         $0.window.reveal()
@@ -89,12 +89,12 @@ scheduler.onBreakTick = { remaining in
 }
 
 scheduler.onBreakEnd = {
-    print("fatcat: break ending")
+    print("pomocat: break ending")
     player.pause()
     overlays.forEach { $0.window.dismiss() }
 }
 
 scheduler.start()
-print("fatcat: scheduler running (\(Int(Config.workDuration / 60))m work / \(Int(Config.breakDuration / 60))m break) — Ctrl-C to quit")
+print("pomocat: scheduler running (\(Int(Config.workDuration / 60))m work / \(Int(Config.breakDuration / 60))m break) — Ctrl-C to quit")
 
 app.run()

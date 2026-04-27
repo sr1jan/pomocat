@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import Combine
-@testable import fatcat
+@testable import pomocat
 
 final class TestClock {
     private(set) var callback: (() -> Void)?

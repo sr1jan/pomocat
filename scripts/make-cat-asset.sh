@@ -46,7 +46,7 @@ elif [[ "$INPUT" =~ ^https?:// ]]; then
   fi
   START="$2"
   END="$3"
-  SOURCE_VIDEO="$(mktemp -t fatcat_src.XXXXXX).mp4"
+  SOURCE_VIDEO="$(mktemp -t pomocat_src.XXXXXX).mp4"
   CLEANUP="$SOURCE_VIDEO"
   echo "==> [1/2] yt-dlp: downloading clip ${START}-${END}"
   yt-dlp -f "bv[height<=1080][ext=mp4]" \

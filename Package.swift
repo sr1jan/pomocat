@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "fatcat",
+    name: "pomocat",
     // macOS 14 is required by VNGenerateForegroundInstanceMaskRequest, which the
     // make-cat-asset tool uses to extract the cat from a green-screen source.
     platforms: [.macOS(.v14)],
@@ -13,15 +13,15 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-testing.git", from: "0.10.0"),
     ],
     targets: [
-        .executableTarget(name: "fatcat", path: "Sources/fatcat"),
+        .executableTarget(name: "pomocat", path: "Sources/pomocat"),
         .executableTarget(name: "make-cat-asset", path: "Sources/make-cat-asset"),
         .testTarget(
-            name: "fatcatTests",
+            name: "pomocatTests",
             dependencies: [
-                "fatcat",
+                "pomocat",
                 .product(name: "Testing", package: "swift-testing"),
             ],
-            path: "Tests/fatcatTests"
+            path: "Tests/pomocatTests"
         ),
     ]
 )
