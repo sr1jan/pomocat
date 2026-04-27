@@ -9,6 +9,10 @@ extension FileHandle: TextOutputStream {
 }
 var standardError = FileHandle.standardError
 
+// Disable stdout buffering so log output is visible when run as a background
+// process (where stdout isn't a TTY and would otherwise block-buffer).
+setbuf(stdout, nil)
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
@@ -56,25 +60,41 @@ let overlays: [Overlay] = NSScreen.screens.map { screen in
 
 print("fatcat: \(overlays.count) screen(s)")
 
-// Debug harness: 1Hz countdown from 5:00 across all monitors. Real
-// BreakScheduler integration is Task 16.
-var remaining: TimeInterval = 300
-overlays.forEach { $0.label.setRemaining(remaining) }
-let tick = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-    remaining -= 1
+// Debug durations so we can observe a full work→break→work cycle in seconds.
+// Task 18 swaps these for the real Pomodoro values from Config.
+let debugWorkDuration: TimeInterval = 10
+let debugBreakDuration: TimeInterval = 5
+
+// Override idleSource to "always active" so the cycle fires deterministically
+// during debug — without this we'd need the user to touch the keyboard/mouse
+// every <60s to keep the work accumulator advancing. Task 18 uses the real
+// idle source (default).
+let scheduler = BreakScheduler(
+    workDuration: debugWorkDuration,
+    breakDuration: debugBreakDuration,
+    idleSource: { 0 }
+)
+
+scheduler.onBreakStart = {
+    print("fatcat: break starting — \(Int(debugBreakDuration))s")
+    overlays.forEach {
+        $0.label.setRemaining(debugBreakDuration)
+        $0.window.reveal()
+    }
+    player.play()
+}
+
+scheduler.onBreakTick = { remaining in
     overlays.forEach { $0.label.setRemaining(remaining) }
 }
-RunLoop.main.add(tick, forMode: .common)
 
-overlays.forEach { $0.window.reveal() }
-player.play()
-print("fatcat: showing cat + countdown for 10s")
-
-DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
-    tick.invalidate()
+scheduler.onBreakEnd = {
+    print("fatcat: break ending")
     player.pause()
     overlays.forEach { $0.window.dismiss() }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { exit(0) }
 }
+
+scheduler.start()
+print("fatcat: scheduler running (\(Int(debugWorkDuration))s work / \(Int(debugBreakDuration))s break) — Ctrl-C to quit")
 
 app.run()
