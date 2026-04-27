@@ -13,6 +13,16 @@ var standardError = FileHandle.standardError
 // process (where stdout isn't a TTY and would otherwise block-buffer).
 setbuf(stdout, nil)
 
+// Hold an activity token for the process lifetime so macOS App Nap doesn't
+// throttle our 1Hz BreakScheduler tick during long work intervals when the app
+// looks idle to the OS. .userInitiated allows normal system sleep but prevents
+// App Nap. The token must be retained — releasing it ends the activity.
+let activityToken = ProcessInfo.processInfo.beginActivity(
+    options: .userInitiated,
+    reason: "fatcat tracks active work time and triggers break overlays"
+)
+_ = activityToken  // silence "never used" — its job is to live as long as the app
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
@@ -60,25 +70,15 @@ let overlays: [Overlay] = NSScreen.screens.map { screen in
 
 print("fatcat: \(overlays.count) screen(s)")
 
-// Debug durations so we can observe a full work→break→work cycle in seconds.
-// Task 18 swaps these for the real Pomodoro values from Config.
-let debugWorkDuration: TimeInterval = 10
-let debugBreakDuration: TimeInterval = 5
-
-// Override idleSource to "always active" so the cycle fires deterministically
-// during debug — without this we'd need the user to touch the keyboard/mouse
-// every <60s to keep the work accumulator advancing. Task 18 uses the real
-// idle source (default).
-let scheduler = BreakScheduler(
-    workDuration: debugWorkDuration,
-    breakDuration: debugBreakDuration,
-    idleSource: { 0 }
-)
+// Real Pomodoro durations and idle source — Config defaults are 25m work, 5m
+// break, 60s idle reset. Override either at the BreakScheduler init site for
+// debug runs.
+let scheduler = BreakScheduler()
 
 scheduler.onBreakStart = {
-    print("fatcat: break starting — \(Int(debugBreakDuration))s")
+    print("fatcat: break starting (\(Int(Config.breakDuration / 60))m)")
     overlays.forEach {
-        $0.label.setRemaining(debugBreakDuration)
+        $0.label.setRemaining(Config.breakDuration)
         $0.window.reveal()
     }
     player.play()
@@ -95,6 +95,6 @@ scheduler.onBreakEnd = {
 }
 
 scheduler.start()
-print("fatcat: scheduler running (\(Int(debugWorkDuration))s work / \(Int(debugBreakDuration))s break) — Ctrl-C to quit")
+print("fatcat: scheduler running (\(Int(Config.workDuration / 60))m work / \(Int(Config.breakDuration / 60))m break) — Ctrl-C to quit")
 
 app.run()
