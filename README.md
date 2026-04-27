@@ -6,18 +6,31 @@ Inspired by [this tweet](https://x.com/i/status/2048404010789687315).
 
 ## Run
 
+### One-off (foreground)
+
 ```bash
 swift run -c release
 ```
 
-Or build once and reuse:
+The app uses `.accessory` activation — no Dock icon, no menu bar. Quit with Ctrl-C in the terminal where you launched it.
+
+### Auto-start at every login (recommended)
+
+Install fatcat as a per-user `launchd` agent. It starts immediately, runs in the background, restarts if it crashes, and starts again at every login.
 
 ```bash
-swift build -c release
-.build/release/fatcat
+scripts/install-launchagent.sh
 ```
 
-The app uses `.accessory` activation — no Dock icon, no menu bar. Quit with Ctrl-C in the terminal where you launched it.
+This builds the release binary (if needed), writes a plist to `~/Library/LaunchAgents/com.fatcat.plist`, and `launchctl load`s it. Logs go to `.fatcat.log` in the repo root.
+
+To stop and disable auto-start:
+
+```bash
+scripts/uninstall-launchagent.sh
+```
+
+Note: because `KeepAlive=true` in the plist, manually `kill`ing the process won't actually stop fatcat — `launchd` respawns it within seconds. Use the uninstall script (or `launchctl unload ~/Library/LaunchAgents/com.fatcat.plist`) for a real stop.
 
 ## How it works
 

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fatcat</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__BINARY__</string>
+    </array>
+
+    <!-- Working directory so Config.assetPath ("Assets/cat.mov", relative to CWD)
+         resolves correctly when launchd starts the binary. -->
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+
+    <!-- Start immediately on launchctl load AND on every login. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart automatically if the process exits for any reason. The whole
+         point is "always-on Pomodoro"; a manual `kill` will be respawned by
+         launchd within seconds. To stop for real, use uninstall-launchagent.sh
+         (or `launchctl unload`). -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Adaptive priority — balanced between Background (throttled) and
+         Interactive (high priority). The 1Hz tick needs to fire reliably but
+         doesn't need real-time guarantees. -->
+    <key>ProcessType</key>
+    <string>Adaptive</string>
+
+    <key>StandardOutPath</key>
+    <string>__REPO__/.fatcat.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO__/.fatcat.log</string>
+</dict>
+</plist>
