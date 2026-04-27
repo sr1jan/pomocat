@@ -111,3 +111,28 @@ func decrements_breakRemaining_during_break() {
 
     #expect(lastTickValue == 7, "Last onBreakTick should fire with 7 (10 - 3)")
 }
+
+@Test
+func fires_onBreakEnd_and_resets_when_break_completes() {
+    let clock = TestClock()
+    let idle = TestIdleSource()
+    idle.seconds = 0
+
+    var endCount = 0
+    let scheduler = BreakScheduler(
+        workDuration: 1,
+        breakDuration: 3,
+        idleResetThreshold: 60,
+        pollInterval: 1,
+        idleSource: idle.read,
+        scheduleTick: clock.schedule
+    )
+    scheduler.onBreakEnd = { endCount += 1 }
+    scheduler.start()
+
+    clock.advance(ticks: 1)        // enter break, breakRemaining=3
+    clock.advance(ticks: 3)        // 3 → 2 → 1 → 0 (onBreakEnd fires on the 0 tick)
+
+    #expect(endCount == 1, "onBreakEnd should fire exactly once")
+    #expect(scheduler.accumulatedActiveSeconds == 0, "Accumulator should reset to 0")
+}

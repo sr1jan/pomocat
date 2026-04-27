@@ -53,7 +53,9 @@ final class BreakScheduler {
         if var remaining = breakRemaining {
             remaining -= pollInterval
             if remaining <= 0 {
-                // Handled in Task 8
+                breakRemaining = nil
+                accumulatedActiveSeconds = 0
+                onBreakEnd?()
                 return
             }
             breakRemaining = remaining
