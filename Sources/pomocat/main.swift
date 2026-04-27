@@ -34,20 +34,23 @@ guard FileManager.default.fileExists(atPath: assetURL.path) else {
     exit(1)
 }
 
-// One shared AVPlayer drives N AVPlayerLayers — multi-monitor sync for free.
-let player = CatPlayer(assetURL: assetURL)
-
-// Per-screen overlay = window + player view + timer label. We snapshot the
-// screen list at startup; hot-plug handling is a future concern.
+// Per-screen overlay = window + player view + timer label + its own CatPlayer.
+// AVPlayer only feeds pixels to one AVPlayerLayer at a time — sharing one
+// player across N layers makes all-but-one screen render solid black. Each
+// screen needs its own AVPlayer/AVPlayerItem; loop sync is good enough for a
+// short looping clip without explicit time alignment. We snapshot the screen
+// list at startup; hot-plug handling is a future concern.
 struct Overlay {
     let window: CatWindow
     let view: CatPlayerView
     let label: TimerLabel
+    let player: CatPlayer
 }
 
 let overlays: [Overlay] = NSScreen.screens.map { screen in
     let window = CatWindow(for: screen)
 
+    let player = CatPlayer(assetURL: assetURL)
     let view = CatPlayerView()
     view.frame = window.contentView!.bounds
     view.autoresizingMask = [.width, .height]
@@ -65,7 +68,7 @@ let overlays: [Overlay] = NSScreen.screens.map { screen in
     label.wantsLayer = true
     window.contentView?.addSubview(label, positioned: .above, relativeTo: view)
 
-    return Overlay(window: window, view: view, label: label)
+    return Overlay(window: window, view: view, label: label, player: player)
 }
 
 print("pomocat: \(overlays.count) screen(s)")
@@ -80,8 +83,8 @@ scheduler.onBreakStart = {
     overlays.forEach {
         $0.label.setRemaining(Config.breakDuration)
         $0.window.reveal()
+        $0.player.play()
     }
-    player.play()
 }
 
 scheduler.onBreakTick = { remaining in
@@ -90,8 +93,10 @@ scheduler.onBreakTick = { remaining in
 
 scheduler.onBreakEnd = {
     print("pomocat: break ending")
-    player.pause()
-    overlays.forEach { $0.window.dismiss() }
+    overlays.forEach {
+        $0.player.pause()
+        $0.window.dismiss()
+    }
 }
 
 scheduler.start()
