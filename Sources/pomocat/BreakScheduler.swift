@@ -1,10 +1,23 @@
 import Foundation
 import Combine
-import CoreGraphics
+import IOKit
 
+// IOHIDSystem's HIDIdleTime is the canonical macOS idle source — works without
+// Input Monitoring/Accessibility permission, unlike CGEventSource which silently
+// returns bogus values (~28 days) when the caller lacks entitlements, breaking
+// the scheduler's "are you active?" check entirely under launchd.
 func realIdleSource() -> TimeInterval {
-    // CGEventType raw value 0 means "any/null event" — returns time since the last event of any kind.
-    CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: 0)!)
+    var iter: io_iterator_t = 0
+    guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"), &iter) == KERN_SUCCESS else { return 0 }
+    defer { IOObjectRelease(iter) }
+    let entry = IOIteratorNext(iter)
+    guard entry != 0 else { return 0 }
+    defer { IOObjectRelease(entry) }
+    var props: Unmanaged<CFMutableDictionary>?
+    guard IORegistryEntryCreateCFProperties(entry, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+          let dict = props?.takeRetainedValue() as? [String: Any],
+          let ns = dict["HIDIdleTime"] as? UInt64 else { return 0 }
+    return TimeInterval(ns) / 1_000_000_000.0
 }
 
 func realTimer(interval: TimeInterval, _ callback: @escaping () -> Void) -> AnyCancellable {
