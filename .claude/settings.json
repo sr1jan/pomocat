@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m *)",
+      "Bash(git update-ref *)",
+      "Bash(swift build *)",
+      "Bash(swift test *)",
+      "Bash(swift run *)",
+      "Bash(swift --version)",
+      "Bash(mkdir *)",
+      "Bash(chmod +x *)",
+      "Bash(xcrun *)",
+      "Bash(xcode-select -p)",
+      "Bash(ffprobe *)",
+      "Bash(ffmpeg *)",
+      "Bash(yt-dlp *)",
+      "Bash(rembg *)",
+      "Bash(scripts/make-cat-asset.sh *)"
+    ]
+  }
+}
