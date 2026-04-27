@@ -87,3 +87,27 @@ func fires_onBreakStart_when_workDuration_reached() {
     clock.advance(ticks: 1)
     #expect(startCount == 1, "Should not fire again on subsequent ticks while in break")
 }
+
+@Test
+func decrements_breakRemaining_during_break() {
+    let clock = TestClock()
+    let idle = TestIdleSource()
+    idle.seconds = 0
+
+    var lastTickValue: TimeInterval? = nil
+    let scheduler = BreakScheduler(
+        workDuration: 1,           // tiny so we enter break after 1 tick
+        breakDuration: 10,
+        idleResetThreshold: 60,
+        pollInterval: 1,
+        idleSource: idle.read,
+        scheduleTick: clock.schedule
+    )
+    scheduler.onBreakTick = { lastTickValue = $0 }
+    scheduler.start()
+
+    clock.advance(ticks: 1)        // triggers onBreakStart, enters break
+    clock.advance(ticks: 3)        // 3 break ticks: 10 → 9 → 8 → 7
+
+    #expect(lastTickValue == 7, "Last onBreakTick should fire with 7 (10 - 3)")
+}

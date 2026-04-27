@@ -50,8 +50,14 @@ final class BreakScheduler {
     }
 
     func tick() {
-        if breakRemaining != nil {
-            // In break — handled in Task 7
+        if var remaining = breakRemaining {
+            remaining -= pollInterval
+            if remaining <= 0 {
+                // Handled in Task 8
+                return
+            }
+            breakRemaining = remaining
+            onBreakTick?(remaining)
             return
         }
         let idle = idleSource()
