@@ -136,3 +136,26 @@ func fires_onBreakEnd_and_resets_when_break_completes() {
     #expect(endCount == 1, "onBreakEnd should fire exactly once")
     #expect(scheduler.accumulatedActiveSeconds == 0, "Accumulator should reset to 0")
 }
+
+@Test
+func transition_to_working_clears_breakRemaining() {
+    let clock = TestClock()
+    let idle = TestIdleSource()
+    idle.seconds = 0
+
+    let scheduler = BreakScheduler(
+        workDuration: 1,
+        breakDuration: 3,
+        idleResetThreshold: 60,
+        pollInterval: 1,
+        idleSource: idle.read,
+        scheduleTick: clock.schedule
+    )
+    scheduler.start()
+
+    clock.advance(ticks: 1)        // enter break
+    clock.advance(ticks: 3)        // exit break, accumulator reset to 0
+    clock.advance(ticks: 1)        // back in working state, accumulate 1s
+
+    #expect(scheduler.accumulatedActiveSeconds == 1, "Should be back in working state, accumulating again")
+}
