@@ -16,9 +16,6 @@ final class CatWindow: NSWindow {
         self.ignoresMouseEvents = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         self.alphaValue = 0
-        // Debug: semi-transparent red so we can see the window during dev
-        self.contentView?.wantsLayer = true
-        self.contentView?.layer?.backgroundColor = NSColor.red.withAlphaComponent(0.4).cgColor
     }
 
     override var canBecomeKey: Bool { false }

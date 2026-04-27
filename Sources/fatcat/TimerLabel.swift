@@ -11,6 +11,13 @@ final class TimerLabel: NSTextField {
         self.font = NSFont.monospacedDigitSystemFont(ofSize: 180, weight: .bold)
         self.alignment = .left
         self.stringValue = "0:00"
+
+        // Dark shadow so white text stays readable over light app windows.
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.85)
+        shadow.shadowOffset = NSSize(width: 0, height: -3)
+        shadow.shadowBlurRadius = 12
+        self.shadow = shadow
     }
 
     required init?(coder: NSCoder) { fatalError("not implemented") }

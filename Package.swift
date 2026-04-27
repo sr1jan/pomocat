@@ -3,7 +3,9 @@ import PackageDescription
 
 let package = Package(
     name: "fatcat",
-    platforms: [.macOS(.v13)],
+    // macOS 14 is required by VNGenerateForegroundInstanceMaskRequest, which the
+    // make-cat-asset tool uses to extract the cat from a green-screen source.
+    platforms: [.macOS(.v14)],
     dependencies: [
         // Swift Testing — added because the user runs Xcode Command Line Tools (no full Xcode).
         // The Swift 6 toolchain ships Testing.framework on disk but not its internal companion
@@ -12,6 +14,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(name: "fatcat", path: "Sources/fatcat"),
+        .executableTarget(name: "make-cat-asset", path: "Sources/make-cat-asset"),
         .testTarget(
             name: "fatcatTests",
             dependencies: [
