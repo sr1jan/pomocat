@@ -50,10 +50,18 @@ final class BreakScheduler {
     }
 
     func tick() {
+        if breakRemaining != nil {
+            // In break — handled in Task 7
+            return
+        }
         let idle = idleSource()
         if idle >= idleResetThreshold {
             return
         }
         accumulatedActiveSeconds += pollInterval
+        if accumulatedActiveSeconds >= workDuration {
+            breakRemaining = breakDuration
+            onBreakStart?()
+        }
     }
 }

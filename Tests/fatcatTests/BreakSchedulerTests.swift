@@ -62,3 +62,28 @@ func pauses_accumulator_when_idle_above_threshold() {
 
     #expect(scheduler.accumulatedActiveSeconds == 0, "Should not accumulate while idle")
 }
+
+@Test
+func fires_onBreakStart_when_workDuration_reached() {
+    let clock = TestClock()
+    let idle = TestIdleSource()
+    idle.seconds = 0
+
+    var startCount = 0
+    let scheduler = BreakScheduler(
+        workDuration: 5,
+        breakDuration: 3,
+        idleResetThreshold: 60,
+        pollInterval: 1,
+        idleSource: idle.read,
+        scheduleTick: clock.schedule
+    )
+    scheduler.onBreakStart = { startCount += 1 }
+    scheduler.start()
+
+    clock.advance(ticks: 5)
+    #expect(startCount == 1, "Should fire onBreakStart exactly once at workDuration")
+
+    clock.advance(ticks: 1)
+    #expect(startCount == 1, "Should not fire again on subsequent ticks while in break")
+}
