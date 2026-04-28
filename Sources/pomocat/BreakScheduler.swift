@@ -42,6 +42,13 @@ final class BreakScheduler {
     private var breakRemaining: TimeInterval? = nil
     private var ticker: AnyCancellable? = nil
 
+    private let debugTick: Bool = ProcessInfo.processInfo.environment["POMOCAT_DEBUG_TICK"] != nil
+    private let debugFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
     init(
         workDuration: TimeInterval = Config.workDuration,
         breakDuration: TimeInterval = Config.breakDuration,
@@ -69,14 +76,17 @@ final class BreakScheduler {
                 breakRemaining = nil
                 accumulatedActiveSeconds = 0
                 onBreakEnd?()
+                logTick(idle: nil)
                 return
             }
             breakRemaining = remaining
             onBreakTick?(remaining)
+            logTick(idle: nil)
             return
         }
         let idle = idleSource()
         if idle >= idleResetThreshold {
+            logTick(idle: idle)
             return
         }
         accumulatedActiveSeconds += pollInterval
@@ -84,5 +94,14 @@ final class BreakScheduler {
             breakRemaining = breakDuration
             onBreakStart?()
         }
+        logTick(idle: idle)
+    }
+
+    private func logTick(idle: TimeInterval?) {
+        guard debugTick else { return }
+        let ts = debugFormatter.string(from: Date())
+        let idleStr = idle.map { String(format: "%.2f", $0) + "s" } ?? "-"
+        let breakStr = breakRemaining.map { String(Int($0)) + "s" } ?? "-"
+        print("pomocat: tick \(ts) idle=\(idleStr) accum=\(Int(accumulatedActiveSeconds))s break=\(breakStr)")
     }
 }
