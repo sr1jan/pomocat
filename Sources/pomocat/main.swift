@@ -38,8 +38,7 @@ guard FileManager.default.fileExists(atPath: assetURL.path) else {
 // AVPlayer only feeds pixels to one AVPlayerLayer at a time — sharing one
 // player across N layers makes all-but-one screen render solid black. Each
 // screen needs its own AVPlayer/AVPlayerItem; loop sync is good enough for a
-// short looping clip without explicit time alignment. We snapshot the screen
-// list at startup; hot-plug handling is a future concern.
+// short looping clip without explicit time alignment.
 struct Overlay {
     let window: CatWindow
     let view: CatPlayerView
@@ -47,7 +46,22 @@ struct Overlay {
     let player: CatPlayer
 }
 
-let overlays: [Overlay] = NSScreen.screens.map { screen in
+// Keyed by CGDirectDisplayID (stable across reconnects of the same display)
+// so we can diff against NSScreen.screens whenever the configuration changes.
+// Snapshotting at startup leaves orphan windows when an external monitor
+// disconnects — AppKit relocates them onto the remaining display and you get
+// N cats stacked on one screen.
+var overlays: [CGDirectDisplayID: Overlay] = [:]
+
+// Tracks an in-progress break so a screen that attaches mid-break joins it
+// instead of staying dark until the next cycle.
+var currentBreakRemaining: TimeInterval? = nil
+
+func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+    (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+}
+
+func makeOverlay(for screen: NSScreen) -> Overlay {
     let window = CatWindow(for: screen)
 
     let player = CatPlayer(assetURL: assetURL)
@@ -71,7 +85,38 @@ let overlays: [Overlay] = NSScreen.screens.map { screen in
     return Overlay(window: window, view: view, label: label, player: player)
 }
 
-print("pomocat: \(overlays.count) screen(s)")
+func syncOverlays() {
+    var present: Set<CGDirectDisplayID> = []
+    for screen in NSScreen.screens {
+        guard let id = displayID(of: screen) else { continue }
+        present.insert(id)
+        if let existing = overlays[id] {
+            // Resolution or arrangement may have changed — re-pin to the screen frame.
+            existing.window.setFrame(screen.frame, display: false)
+        } else {
+            let overlay = makeOverlay(for: screen)
+            overlays[id] = overlay
+            if let remaining = currentBreakRemaining {
+                overlay.label.setRemaining(remaining)
+                overlay.window.reveal()
+                overlay.player.play()
+            }
+        }
+    }
+    for (id, overlay) in overlays where !present.contains(id) {
+        overlay.player.pause()
+        overlay.window.orderOut(nil)
+        overlays.removeValue(forKey: id)
+    }
+    print("pomocat: \(overlays.count) screen(s) active")
+}
+
+syncOverlays()
+
+NotificationCenter.default.addObserver(
+    forName: NSApplication.didChangeScreenParametersNotification,
+    object: nil, queue: .main
+) { _ in syncOverlays() }
 
 // Real Pomodoro durations and idle source — Config defaults are 25m work, 5m
 // break, 60s idle reset. Override either at the BreakScheduler init site for
@@ -80,7 +125,8 @@ let scheduler = BreakScheduler()
 
 scheduler.onBreakStart = {
     print("pomocat: break starting (\(Int(Config.breakDuration / 60))m)")
-    overlays.forEach {
+    currentBreakRemaining = Config.breakDuration
+    overlays.values.forEach {
         $0.label.setRemaining(Config.breakDuration)
         $0.window.reveal()
         $0.player.play()
@@ -88,12 +134,14 @@ scheduler.onBreakStart = {
 }
 
 scheduler.onBreakTick = { remaining in
-    overlays.forEach { $0.label.setRemaining(remaining) }
+    currentBreakRemaining = remaining
+    overlays.values.forEach { $0.label.setRemaining(remaining) }
 }
 
 scheduler.onBreakEnd = {
     print("pomocat: break ending")
-    overlays.forEach {
+    currentBreakRemaining = nil
+    overlays.values.forEach {
         $0.player.pause()
         $0.window.dismiss()
     }
